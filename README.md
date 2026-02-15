@@ -1,16 +1,57 @@
-# pokemon_tcg_12_02_2026
+# Pokedex TCG (Flutter)
 
-A new Flutter project.
+Application Flutter de recherche/exploration de cartes Pokémon TCG.
 
-## Getting Started
+## Pourquoi il y a un proxy ?
 
-This project is a starting point for a Flutter application.
+Sur Flutter Web, les appels HTTP directs vers certaines routes de l’API cartes peuvent être bloqués par le navigateur (CORS) ou renvoyer des erreurs réseau selon l’environnement.
 
-A few resources to get you started if this is your first Flutter project:
+Le proxy local (`proxy/pokemon_proxy.js`) sert d’intermédiaire :
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- l’app Web appelle `http://localhost:8787/cards`
+- le proxy appelle l’API distante Pokémon TCG
+- le proxy renvoie la réponse JSON au navigateur avec les bons headers CORS
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+En résumé : le proxy existe pour rendre la recherche stable en Web local.
+
+## Ce que fait le proxy
+
+- endpoint local : `GET /cards?name=<pokemon>&pageSize=<n>`
+- forward vers `https://api.pokemontcg.io/v2/cards?q=name:<pokemon>&pageSize=<n>`
+- optionnel : ajoute la clé API via `POKEMON_TCG_API_KEY`
+
+## Lancer le projet (Web)
+
+1. Installer les dépendances Flutter :
+
+```bash
+flutter pub get
+```
+
+2. Démarrer le proxy (terminal 1) :
+
+```bash
+node proxy/pokemon_proxy.js
+```
+
+3. Lancer Flutter Web (terminal 2) :
+
+```bash
+flutter run -d chrome
+```
+
+## Variables utiles
+
+- `POKEMON_TCG_API_KEY` : clé API utilisée par le proxy (optionnelle)
+- `POKEMON_PROXY_URL` : URL du proxy côté app Flutter Web (défaut: `http://localhost:8787`)
+
+Exemple PowerShell :
+
+```powershell
+$env:POKEMON_TCG_API_KEY="votre_cle"
+node proxy/pokemon_proxy.js
+```
+
+## Note sur les données
+
+L’application filtre les cartes incomplètes/inconnues pour éviter d’afficher des entrées sans nom exploitable ni image.
