@@ -42,7 +42,7 @@ class _SearchPageState extends State<SearchPage> {
                       Expanded(
                         child: TextField(
                           controller: _controller,
-                          onChanged: viewModel.setPokemonName,
+                          onChanged: viewModel.onSearchInputChanged,
                           onSubmitted: (_) => viewModel.searchPokemon(),
                           decoration: const InputDecoration(
                             labelText: 'Nom du Pokémon',
@@ -58,6 +58,43 @@ class _SearchPageState extends State<SearchPage> {
                       ),
                     ],
                   ),
+                  if (viewModel.loadingSuggestions)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: LinearProgressIndicator(),
+                    ),
+                  if (viewModel.suggestions.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        border: Border.all(color: Theme.of(context).dividerColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: viewModel.suggestions.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final suggestion = viewModel.suggestions[index];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.search),
+                            title: Text(suggestion),
+                            onTap: () {
+                              viewModel.selectSuggestion(suggestion);
+                              _controller.value = TextEditingValue(
+                                text: suggestion,
+                                selection: TextSelection.collapsed(
+                                  offset: suggestion.length,
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   Expanded(child: _buildBody(viewModel)),
                 ],

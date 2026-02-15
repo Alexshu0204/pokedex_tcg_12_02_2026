@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -14,14 +15,20 @@ class PokemonSearchViewModel extends ChangeNotifier {
 
   String _pokemonName = '';
   List<Pokemon> _results = [];
+  List<String> _suggestions = [];
   bool _loading = false;
+  bool _loadingSuggestions = false;
   String? _errorMessage;
   bool _hasSearched = false;
+  Timer? _suggestionDebounce;
+  int _suggestionRequestId = 0;
 
   // Getters
   String get pokemonName => _pokemonName;
   List<Pokemon> get results => _results;
+  List<String> get suggestions => _suggestions;
   bool get loading => _loading;
+  bool get loadingSuggestions => _loadingSuggestions;
   String? get errorMessage => _errorMessage;
   bool get hasSearched => _hasSearched;
 
@@ -29,6 +36,103 @@ class PokemonSearchViewModel extends ChangeNotifier {
   void setPokemonName(String name) {
     _pokemonName = name;
     notifyListeners();
+  }
+
+  void onSearchInputChanged(String name) {
+    _pokemonName = name;
+    _debounceSuggestions();
+    notifyListeners();
+  }
+
+  void selectSuggestion(String name) {
+    _pokemonName = name;
+    _suggestions = [];
+    notifyListeners();
+  }
+
+  void _debounceSuggestions() {
+    _suggestionDebounce?.cancel();
+
+    final query = _pokemonName.trim();
+    if (query.length < 2) {
+      _loadingSuggestions = false;
+      _suggestions = [];
+      return;
+    }
+
+    _loadingSuggestions = true;
+    _suggestionDebounce = Timer(const Duration(milliseconds: 320), () {
+      _fetchSuggestions(query);
+    });
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    final currentRequestId = ++_suggestionRequestId;
+
+    try {
+      final uri = Uri.https('api.tcgdex.net', '/v2/en/cards', {'name': query});
+      final response = await http.get(uri, headers: const {'Accept': 'application/json'});
+
+      if (currentRequestId != _suggestionRequestId) {
+        return;
+      }
+
+      if (response.statusCode != 200) {
+        _suggestions = [];
+        _loadingSuggestions = false;
+        notifyListeners();
+        return;
+      }
+
+      final decoded = json.decode(response.body);
+      if (decoded is! List) {
+        _suggestions = [];
+        _loadingSuggestions = false;
+        notifyListeners();
+        return;
+      }
+
+      final normalizedQuery = query.toLowerCase();
+      final names = <String>[];
+      final seen = <String>{};
+
+      for (final item in decoded.whereType<Map<String, dynamic>>()) {
+        final rawName = item['name']?.toString().trim();
+        if (rawName == null || rawName.isEmpty) {
+          continue;
+        }
+
+        final lower = rawName.toLowerCase();
+        if (seen.contains(lower)) {
+          continue;
+        }
+
+        if (!lower.contains(normalizedQuery)) {
+          continue;
+        }
+
+        seen.add(lower);
+        names.add(rawName);
+      }
+
+      names.sort((a, b) {
+        final aStarts = a.toLowerCase().startsWith(normalizedQuery);
+        final bStarts = b.toLowerCase().startsWith(normalizedQuery);
+        if (aStarts == bStarts) {
+          return a.compareTo(b);
+        }
+        return aStarts ? -1 : 1;
+      });
+
+      _suggestions = names.take(8).toList();
+    } catch (_) {
+      _suggestions = [];
+    } finally {
+      if (currentRequestId == _suggestionRequestId) {
+        _loadingSuggestions = false;
+        notifyListeners();
+      }
+    }
   }
 
   /// Recherche un Pokémon en utilisant l'API Pokémon TCG.
@@ -44,6 +148,7 @@ class PokemonSearchViewModel extends ChangeNotifier {
     _loading = true;
     _errorMessage = null;
     _results = [];
+    _suggestions = [];
     _hasSearched = true;
     notifyListeners();
 
@@ -58,6 +163,7 @@ class PokemonSearchViewModel extends ChangeNotifier {
           _results = data
               .whereType<Map<String, dynamic>>()
               .map(Pokemon.fromJson)
+              .where((pokemon) => pokemon.isKnownCard)
               .toList();
           _errorMessage = null;
         } else {
@@ -87,12 +193,21 @@ class PokemonSearchViewModel extends ChangeNotifier {
 
   /// Réinitialise les données et les erreurs.
   void clearSearch() {
+    _suggestionDebounce?.cancel();
     _pokemonName = '';
     _results = [];
+    _suggestions = [];
+    _loadingSuggestions = false;
     _errorMessage = null;
     _loading = false;
     _hasSearched = false;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _suggestionDebounce?.cancel();
+    super.dispose();
   }
 
   Future<http.Response> _fetchResponse() async {
@@ -156,7 +271,7 @@ class PokemonSearchViewModel extends ChangeNotifier {
         imageSmall: imageUrl,
         imageLarge: _normalizeTcgdexImage(image, highQuality: true),
       );
-    }).toList();
+    }).where((pokemon) => pokemon.isKnownCard).toList();
 
     _errorMessage = null;
   }

@@ -58,7 +58,7 @@ class ExploreViewModel extends ChangeNotifier {
             imageSmall: image,
             imageLarge: _normalizeTcgdexImage(item['image']?.toString(), highQuality: true),
           );
-        }),
+        }).where((pokemon) => pokemon.isKnownCard),
       );
 
       _visibleCards = _allCards.take(_pageSize).toList();

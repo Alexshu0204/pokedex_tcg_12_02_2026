@@ -50,6 +50,16 @@ class Pokemon {
 		);
 	}
 
+	bool get isKnownCard {
+		final normalizedName = name.trim().toLowerCase();
+		if (normalizedName.isEmpty || normalizedName == 'unknown' || normalizedName == 'inconnu') {
+			return false;
+		}
+
+		final image = imageSmall?.trim();
+		return image != null && image.isNotEmpty;
+	}
+
 	static List<String> _toStringList(dynamic value) {
 		if (value is List) {
 			return value.map((item) => item.toString()).toList();
